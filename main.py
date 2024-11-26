@@ -4,6 +4,7 @@ import math
 import numpy as np
 import pandas as pd
 from random import shuffle
+import re
 
 
 
@@ -24,8 +25,7 @@ class NaiveBayeClassifier:
                 json_line = json.loads(line.strip())
                 dataset.append({
                     "category":json_line['category'],
-                    "headline":json_line['headline'],
-                    "description":json_line['short_description']
+                    "data" : self.preprocess_text(f"{json_line['headline']} {json_line['short_description']}")
                 })
 
 
@@ -33,7 +33,7 @@ class NaiveBayeClassifier:
         for doc in dataset:
             if doc["category"] not in self.category:
                 self.category.append(doc["category"])
-            text = self.preprocess_text(f"{doc['headline']} {doc['description']}")
+            text = doc["data"]
             self.vocabulary.update(text)
         self.laplace_smoothing = math.log(1 / (len(self.vocabulary) + 1))
         #initialisationg accuracy_recall_results with category
@@ -41,9 +41,17 @@ class NaiveBayeClassifier:
         self.accuracy_recall_results = {category:{"true_positive":1,"false_positive":1,"false_negative":1} for category in self.category}
 
         return dataset
-
+    
+    def binarization(self,dataset):
+        new_data = []
+        for doc in dataset:
+            new_data.append({"category":doc["category"], 
+                             "data":set(doc["data"])})
+        return new_data
+        
     def preprocess_text(self,text):
-        return text.lower().split()
+        text = re.sub(r'[^\w\s]', '', text.lower())
+        return text.split()
     
     def train_model(self,dataset):
 
@@ -53,7 +61,7 @@ class NaiveBayeClassifier:
         for doc in dataset:
             doc_category = doc["category"]
             self.class_probabilities[doc_category]+=1
-            docs_by_category[doc_category].append(self.preprocess_text(f"{doc['headline']} {doc['description']}"))
+            docs_by_category[doc_category].append(doc["data"])
         
 
         #probability of a document happening
@@ -93,7 +101,7 @@ class NaiveBayeClassifier:
         
 
         for doc in dataset:
-            predicted_category = self.prediction(self.preprocess_text(f"{doc['headline']} {doc['description']}"))
+            predicted_category = self.prediction(doc["data"])
             actual_category = doc["category"]
             if predicted_category == actual_category:
                 self.accuracy_recall_results[actual_category]["true_positive"]+=1
@@ -110,6 +118,8 @@ def main():
 
     raw_data = classifier.load_data(sys.argv[1])
     shuffle(raw_data)
+    raw_data = classifier.binarization(raw_data)
+
 
     datasets = [raw_data[int(len(raw_data)/5)*index:int(len(raw_data)/5)*(index+1)] for index in range(5)]
     #cross validation with 5 datasets
